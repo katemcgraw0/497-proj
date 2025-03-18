@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
 
@@ -12,35 +12,58 @@ export default function SignIn() {
   const [isSignUp, setIsSignUp] = useState(false); // Toggle between sign-in & sign-up
   const [errorMessage, setErrorMessage] = useState('');
 
-  // If the user is already logged in, redirect to home (optional)
-  if (session) {
-    router.push('/');
-  }
+  // Log session info for debugging
+  useEffect(() => {
+    console.log('Session from useSession():', session);
+    if (session) {
+      console.log('User is already logged in:', session.user);
+      router.push('/');
+    }
+  }, [session, router]);
 
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
+    console.log('Form submit triggered. isSignUp =', isSignUp);
+    console.log('Attempting auth with email:', email);
+
     try {
       if (isSignUp) {
-        // Sign Up logic
-        const { error } = await supabaseClient.auth.signUp({
+        console.log('--- Signing Up ---');
+        const { data, error } = await supabaseClient.auth.signUp({
           email,
           password,
         });
-        if (error) throw error;
+        console.log('Sign-up response data:', data);
+
+        if (error) {
+          console.error('Sign-up error:', error);
+          throw error;
+        } else {
+          console.log('No sign-up error. Data:', data);
+        }
       } else {
-        // Sign In logic
-        const { error } = await supabaseClient.auth.signInWithPassword({
+        console.log('--- Signing In ---');
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
           email,
           password,
         });
-        if (error) throw error;
+        console.log('Sign-in response data:', data);
+
+        if (error) {
+          console.error('Sign-in error:', error);
+          throw error;
+        } else {
+          console.log('No sign-in error. Data:', data);
+        }
       }
 
-      // On success, supabase will set a session. You can then redirect:
+      // On success, supabase will set a session.
+      console.log('Auth attempt successful. Navigating to /');
       router.push('/');
     } catch (err: any) {
+      console.error('Caught auth error:', err);
       setErrorMessage(err.message);
     }
   };
