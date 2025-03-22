@@ -4,8 +4,9 @@ import { SessionContextProvider, useSession } from '@supabase/auth-helpers-react
 import { useState, useEffect } from 'react';
 import { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
+import { ShoppingCartProvider } from '@/context/ShoppingCartContext';  // Import the provider
 
-export default function App({ Component, pageProps }: AppProps) {
+function App({ Component, pageProps }: AppProps) {
   const [supabase] = useState(() => createPagesBrowserClient());
   const router = useRouter();
   const noAuthNeeded = ['/signin']; // Any routes that don't require auth
@@ -44,13 +45,14 @@ export default function App({ Component, pageProps }: AppProps) {
   }
 
   return (
-    <SessionContextProvider
-      supabaseClient={supabase}
-      initialSession={pageProps.initialSession}
-    >
-      <SessionCheck>
-        <Component {...pageProps} />
-      </SessionCheck>
+    <SessionContextProvider supabaseClient={supabase} initialSession={pageProps.initialSession}>
+      <ShoppingCartProvider>  {/* Wrap with ShoppingCartProvider */}
+        <SessionCheck>
+          <Component {...pageProps} />
+        </SessionCheck>
+      </ShoppingCartProvider>
     </SessionContextProvider>
   );
 }
+
+export default App;
