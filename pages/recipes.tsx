@@ -6,7 +6,7 @@ import RecipeCard from '@/components/RecipeCard';
 interface Recipe {
   id: number;
   title: string;
-  restrictions: string[];
+  restrictions?: string[];
 }
 
 export default function RecipesPage() {
@@ -19,6 +19,7 @@ export default function RecipesPage() {
   const [suggestedRecipes, setSuggestedRecipes] = useState<Recipe[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
+  const SUGGESTED_RECIPES_LIMIT = 10;
 
   useEffect(() => {
     if (session === null) {
@@ -43,10 +44,9 @@ export default function RecipesPage() {
     return data;
   };
 
-  const fetchFilteredRecipes = async (selectedRestrictions: string[]) => {
+  const fetchFilteredRecipes = async (selectedRestrictions: string[], savedRecipeIds: number[]) => {
     let query = supabase.from('Recipes').select('id, title, restrictions');
 
-    // Apply filter only if there are selected restrictions
     if (selectedRestrictions.length > 0) {
       query = query.contains('restrictions', selectedRestrictions);
     }
@@ -54,11 +54,57 @@ export default function RecipesPage() {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error fetching filtered recipes:', error);
+      console.error('Error fetching suggested recipes:', error);
       return [];
     }
 
-    return data;
+    return data.filter(recipe => !savedRecipeIds.includes(recipe.id)).slice(0, SUGGESTED_RECIPES_LIMIT);
+  };
+
+  const fetchSavedRecipes = async () => {
+    if (!session) return;
+
+    setLoading(true);
+    try {
+      const { data: savedIds, error: savedError } = await supabase
+        .from('SavedRecipes')
+        .select('recipe_id')
+        .eq('user_id', session.user.id);
+
+      if (savedError) {
+        console.error('Error fetching saved recipe IDs:', savedError);
+        setSavedRecipes([]);
+        setLoading(false);
+        return [];
+      }
+
+      if (!savedIds || savedIds.length === 0) {
+        setSavedRecipes([]);
+        setLoading(false);
+        return [];
+      }
+
+      const recipeIds = savedIds.map((r) => r.recipe_id);
+      const { data: savedData, error: savedDataError } = await supabase
+        .from('Recipes')
+        .select('id, title')
+        .in('id', recipeIds);
+
+      if (savedDataError) {
+        console.error('Error fetching saved recipes:', savedDataError);
+        setSavedRecipes([]);
+        setLoading(false);
+        return [];
+      }
+
+      setSavedRecipes(savedData || []);
+      return recipeIds;
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      return [];
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -72,7 +118,8 @@ export default function RecipesPage() {
         .filter(([_, value]) => value)
         .map(([key]) => key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()));
 
-      const filteredRecipes = await fetchFilteredRecipes(selectedRestrictions);
+      const savedRecipeIds = await fetchSavedRecipes();
+      const filteredRecipes = await fetchFilteredRecipes(selectedRestrictions, savedRecipeIds);
       setSuggestedRecipes(filteredRecipes);
     };
 
@@ -100,7 +147,7 @@ export default function RecipesPage() {
         />
       </div>
 
-      <h2 className="mb-4 text-xl font-semibold">Filtered Recipes</h2>
+      <h2 className="mb-4 text-xl font-semibold">Suggested Recipes</h2>
       {suggestedRecipes.length === 0 ? (
         <p>No matching recipes found.</p>
       ) : (
@@ -110,6 +157,21 @@ export default function RecipesPage() {
           ))}
         </div>
       )}
+
+      <div className="mt-8">
+        <h2 className="mb-4 text-xl font-bold">Your Saved Recipes</h2>
+        {loading ? (
+          <p>Loading saved recipes...</p>
+        ) : savedRecipes.length === 0 ? (
+          <p>No saved recipes found.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {savedRecipes.map((recipe) => (
+              <RecipeCard key={recipe.id} id={recipe.id} title={recipe.title} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
