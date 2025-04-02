@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { useSession, useSupabaseClient } from "@supabase/auth-helpers-react";
-import { MouseEvent } from "react";
+import { MouseEvent, useEffect, useState } from "react";
 
 interface RecipeCardProps {
   id: number;
@@ -18,8 +18,25 @@ export default function RecipeCard({
   const supabase = useSupabaseClient();
   const session = useSession();
 
+  // We'll store the image URL in state after fetching it
+  const [imageUrl, setImageUrl] = useState("/file.svg"); // fallback icon initially
+
+  // Fetch the public URL for this recipe's image in Supabase Storage
+  useEffect(() => {
+    const { data } = supabase.storage
+      .from("recipes")
+      .getPublicUrl(`${id}.jpeg`);
+
+    if (!data || !data.publicUrl) {
+      console.error("Error fetching image URL or public URL is missing.");
+    } else {
+      setImageUrl(data.publicUrl);
+    }
+  }, [id, supabase]);
+
+  // Handler to save the recipe
   const handleSave = async (e: MouseEvent<HTMLButtonElement>) => {
-    // Prevent the parent div's onClick from firing
+    // Prevent the parent <div> onClick (which navigates) from firing
     e.stopPropagation();
 
     if (!session) {
@@ -40,7 +57,7 @@ export default function RecipeCard({
         alert("Failed to save recipe.");
       } else {
         alert("Recipe saved!");
-        // Call the parent callback to refresh saved recipes
+        // Let the parent know so it can refresh
         if (onRecipeSaveSuccess) onRecipeSaveSuccess();
       }
     } catch (err) {
@@ -55,10 +72,10 @@ export default function RecipeCard({
       className="cursor-pointer bg-gray-200 rounded-lg p-2 shadow-lg"
     >
       <Image
-        src={"/file.svg"}
+        src={imageUrl}          // Use our fetched image URL
         alt={title}
-        width={20}
-        height={100}
+        width={200}
+        height={200}
         className="rounded-lg object-cover w-full h-24 md:h-32"
       />
       <h3 className="text-lg font-semibold mt-2">{title}</h3>
