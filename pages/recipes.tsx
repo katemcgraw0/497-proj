@@ -1,4 +1,4 @@
-import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'; 
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import RecipeCard from '@/components/RecipeCard';
@@ -6,7 +6,7 @@ import RecipeCard from '@/components/RecipeCard';
 interface Recipe {
   id: number;
   title: string;
-  restrictions?: string[];
+  restrictions: string[];
 }
 
 export default function RecipesPage() {
@@ -19,145 +19,146 @@ export default function RecipesPage() {
   const [suggestedRecipes, setSuggestedRecipes] = useState<Recipe[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
-  const SUGGESTED_RECIPES_LIMIT = 10;
+  const [userRestrictions, setUserRestrictions] = useState<string[]>([]);
 
   useEffect(() => {
     if (session === null) {
       router.push('/login');
+    } else {
+      fetchUserRestrictions();
+      fetchSavedRecipes();
     }
-  }, [session, router]);
+  }, [session]);
 
-  const fetchUserSettings = async () => {
-    if (!session) return null;
-
+  const fetchUserRestrictions = async () => {
+    if (!session) return;
+  
     const { data, error } = await supabase
       .from('UserSettings')
       .select('vegan, gluten_free, vegetarian, dairy_free, nut_free')
       .eq('user_id', session.user.id)
       .single();
-
+    
     if (error) {
-      console.error('Error fetching user settings:', error);
-      return null;
+      console.error('Error fetching user restrictions:', error);
+      return;
     }
-
-    return data;
+  
+    // Log the data to ensure it has the expected structure
+    console.log('Fetched UserSettings:', data);
+  
+    // Ensure the data is correctly structured
+    const restrictionsMap: { [key in keyof typeof data]: string } = {
+      vegan: 'Vegan',
+      gluten_free: 'Gluten Free',
+      vegetarian: 'Vegetarian',
+      dairy_free: 'Dairy Free',
+      nut_free: 'Nut Free',
+    };
+  
+    // Generate the selectedRestrictions list
+    const selectedRestrictions = Object.keys(data)
+      .filter((key) => data[key as keyof typeof data])  // Only select the ones that are true
+      .map((key) => restrictionsMap[key as keyof typeof data]);  // Map to the string labels
+  
+    setUserRestrictions(selectedRestrictions);  // Set the restrictions state
   };
-
-  const fetchFilteredRecipes = async (selectedRestrictions: string[], savedRecipeIds: number[]) => {
-    let query = supabase.from('Recipes').select('id, title, restrictions');
-
-    if (selectedRestrictions.length > 0) {
-      query = query.contains('restrictions', selectedRestrictions);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching suggested recipes:', error);
-      return [];
-    }
-
-    return data.filter(recipe => !savedRecipeIds.includes(recipe.id)).slice(0, SUGGESTED_RECIPES_LIMIT);
-  };
+  
 
   const fetchSavedRecipes = async () => {
     if (!session) return;
-
     setLoading(true);
-    try {
-      const { data: savedIds, error: savedError } = await supabase
-        .from('SavedRecipes')
-        .select('recipe_id')
-        .eq('user_id', session.user.id);
-
-      if (savedError) {
-        console.error('Error fetching saved recipe IDs:', savedError);
-        setSavedRecipes([]);
-        setLoading(false);
-        return [];
-      }
-
-      if (!savedIds || savedIds.length === 0) {
-        setSavedRecipes([]);
-        setLoading(false);
-        return [];
-      }
-
-      const recipeIds = savedIds.map((r) => r.recipe_id);
-      const { data: savedData, error: savedDataError } = await supabase
-        .from('Recipes')
-        .select('id, title')
-        .in('id', recipeIds);
-
-      if (savedDataError) {
-        console.error('Error fetching saved recipes:', savedDataError);
-        setSavedRecipes([]);
-        setLoading(false);
-        return [];
-      }
-
-      setSavedRecipes(savedData || []);
-      return recipeIds;
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      return [];
-    } finally {
+    const { data: savedIds, error } = await supabase
+      .from('SavedRecipes')
+      .select('recipe_id')
+      .eq('user_id', session.user.id);
+    if (error) {
+      console.error('Error fetching saved recipe IDs:', error);
       setLoading(false);
+      return;
     }
+    const recipeIds = savedIds.map((r) => r.recipe_id);
+    const { data: savedData, error: savedDataError } = await supabase
+      .from('Recipes')
+      .select('id, title, restrictions')
+      .in('id', recipeIds);
+    if (savedDataError) {
+      console.error('Error fetching saved recipes:', savedDataError);
+      setLoading(false);
+      return;
+    }
+    setSavedRecipes(savedData || []);
+    setLoading(false);
   };
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchRecipes = async () => {
       if (!session) return;
-
-      const userSettings = await fetchUserSettings();
-      if (!userSettings) return;
-
-      const selectedRestrictions = Object.entries(userSettings)
-        .filter(([_, value]) => value)
-        .map(([key]) => key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()));
-
-      const savedRecipeIds = await fetchSavedRecipes();
-      const filteredRecipes = await fetchFilteredRecipes(selectedRestrictions, savedRecipeIds);
-      setSuggestedRecipes(filteredRecipes);
+      let query = supabase.from('Recipes').select('id, title, restrictions');
+      if (searchTerm) {
+        query = query.ilike('title', `%${searchTerm}%`);
+      } else {
+        query = query.order('id', { ascending: true }).limit(10);
+      }
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching recipes:', error);
+        return;
+      }
+      const filterByRestrictions = (recipe: Recipe) =>
+        userRestrictions.every((r) => recipe.restrictions.includes(r));
+      const filteredRecipes = (data || []).filter(filterByRestrictions);
+      if (searchTerm) {
+        setSearchedRecipes(filteredRecipes);
+      } else {
+        setSuggestedRecipes(filteredRecipes);
+      }
     };
-
-    fetchData();
-  }, [session]);
+    fetchRecipes();
+  }, [searchTerm, session, userRestrictions]);
 
   return (
     <div className="min-h-screen p-6">
-      <div className="mb-4">
-        <button
-          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-          onClick={() => router.push('/')}
-        >
-          Back to Home
-        </button>
-      </div>
-
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Search recipes..."
-          className="w-full rounded border p-2"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      <h2 className="mb-4 text-xl font-semibold">Suggested Recipes</h2>
-      {suggestedRecipes.length === 0 ? (
-        <p>No matching recipes found.</p>
+      <button
+        className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+        onClick={() => router.push('/')}
+      >
+        Back to Home
+      </button>
+      <input
+        type="text"
+        placeholder="Search recipes..."
+        className="w-full rounded border p-2 mt-4"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
+      {searchTerm ? (
+        <div>
+          <h2 className="mb-4 text-xl font-semibold">Search Results</h2>
+          {searchedRecipes.length === 0 ? (
+            <p>No recipes found.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {searchedRecipes.map((recipe) => (
+                <RecipeCard key={recipe.id} id={recipe.id} title={recipe.title} />
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {suggestedRecipes.map((recipe) => (
-            <RecipeCard key={recipe.id} id={recipe.id} title={recipe.title} />
-          ))}
+        <div>
+          <h2 className="mb-4 text-xl font-semibold">Suggested Recipes</h2>
+          {suggestedRecipes.length === 0 ? (
+            <p>No suggestions available.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {suggestedRecipes.map((recipe) => (
+                <RecipeCard key={recipe.id} id={recipe.id} title={recipe.title} />
+              ))}
+            </div>
+          )}
         </div>
       )}
-
       <div className="mt-8">
         <h2 className="mb-4 text-xl font-bold">Your Saved Recipes</h2>
         {loading ? (
