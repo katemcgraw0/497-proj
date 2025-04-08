@@ -6,35 +6,44 @@ export default function ShoppingList() {
   const { cart, clearCart } = useShoppingCart();
 
   return (
-    <div className="min-h-screen flex flex-col items-center p-6">
+    <div className="min-h-screen flex flex-col items-center bg-gray-50 p-6">
       {/* Shopping Cart Header */}
-      <div className="bg-black text-white text-lg font-semibold px-6 py-3 rounded-lg w-full max-w-sm text-center mb-4">
+      <div className="bg-black text-white text-2xl font-bold px-6 py-3 rounded-md w-full max-w-md text-center shadow-md">
         Your Shopping Cart
       </div>
 
       {/* Shopping List Items */}
-      <div className="space-y-3 w-full max-w-sm">
+      <div className="w-full max-w-md mt-6 space-y-4">
         {cart.length > 0 ? (
           cart.map((item, index) => (
-            <div key={index} className="bg-gray-300 text-black text-center px-4 py-2 rounded-lg shadow">
+            <div
+              key={index}
+              className="bg-white text-gray-800 text-lg px-4 py-3 rounded-md shadow-sm flex items-center justify-center"
+            >
               {item}
             </div>
           ))
         ) : (
-          <p className="text-gray-500 text-center">No items in cart</p>
+          <div className="bg-white text-gray-500 text-lg px-4 py-3 rounded-md shadow-sm text-center">
+            No items in your cart.
+          </div>
         )}
       </div>
 
       {/* Order Groceries Button */}
-      <button className="mt-10 bg-blue-500 text-white text-lg font-semibold px-6 py-3 rounded-lg shadow w-full max-w-sm">
-        order groceries
+      <button
+        className="mt-8 bg-blue-600 text-white text-lg font-semibold px-6 py-3 rounded-md shadow-md w-full max-w-md 
+                   hover:bg-blue-700 transition-colors duration-200"
+      >
+        Order Groceries
       </button>
 
       {/* Clear Cart Button */}
       {cart.length > 0 && (
         <button
           onClick={clearCart}
-          className="mt-4 bg-red-500 text-white text-lg font-semibold px-6 py-3 rounded-lg shadow w-full max-w-sm"
+          className="mt-4 bg-red-500 text-white text-lg font-semibold px-6 py-3 rounded-md shadow-md w-full max-w-md 
+                     hover:bg-red-600 transition-colors duration-200"
         >
           Clear Cart
         </button>
@@ -43,7 +52,8 @@ export default function ShoppingList() {
       {/* Back to Home Button */}
       <button
         onClick={() => router.push("/")}
-        className="mt-4 bg-gray-300 text-black text-lg font-semibold px-6 py-3 rounded-lg shadow w-full max-w-sm"
+        className="mt-4 bg-white text-gray-700 text-lg font-semibold px-6 py-3 rounded-md shadow-md w-full max-w-md 
+                   hover:bg-gray-100 transition-colors duration-200"
       >
         Back to Home
       </button>

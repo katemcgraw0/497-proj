@@ -6,13 +6,18 @@ import { MouseEvent, useEffect, useState } from "react";
 interface RecipeCardProps {
   id: number;
   title: string;
-  onRecipeSaveSuccess?: () => void; // callback for post-save refresh
+  // New
+  isSaved: boolean; // Are we rendering this card as a saved recipe or not?
+  onRecipeSaveSuccess?: () => void;   // callback for post-save refresh
+  onRecipeUnsaveSuccess?: () => void; // callback for post-unsave refresh
 }
 
 export default function RecipeCard({
   id,
   title,
+  isSaved,
   onRecipeSaveSuccess,
+  onRecipeUnsaveSuccess,
 }: RecipeCardProps) {
   const router = useRouter();
   const supabase = useSupabaseClient();
@@ -23,22 +28,44 @@ export default function RecipeCard({
 
   // Fetch the public URL for this recipe's image in Supabase Storage
   useEffect(() => {
-    const { data } = supabase.storage
-      .from("recipes")
-      .getPublicUrl(`${id}.jpeg`);
-
-    if (!data || !data.publicUrl) {
-      console.error("Error fetching image URL or public URL is missing.");
-    } else {
+    const { data } = supabase.storage.from("recipes").getPublicUrl(`${id}.jpeg`);
+    if (data?.publicUrl) {
       setImageUrl(data.publicUrl);
+    } else {
+      console.error("Error fetching image URL or public URL is missing.");
     }
   }, [id, supabase]);
 
-  // Handler to save the recipe
+  // Handler to SAVE the recipe
   const handleSave = async (e: MouseEvent<HTMLButtonElement>) => {
-    // Prevent the parent <div> onClick (which navigates) from firing
-    e.stopPropagation();
+    e.stopPropagation(); // so clicking doesn't also trigger card's onClick
+    if (!session) {
+      router.push("/login");
+      return;
+    }
 
+    try {
+      const { error } = await supabase.from("SavedRecipes").insert({
+        recipe_id: id,
+        user_id: session.user.id,
+      });
+
+      if (error) {
+        console.error("Error saving recipe:", error);
+        alert("Failed to save recipe.");
+      } else {
+        alert("Recipe saved!");
+        if (onRecipeSaveSuccess) onRecipeSaveSuccess();
+      }
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      alert("An unexpected error occurred.");
+    }
+  };
+
+  // Handler to UNSAVE the recipe
+  const handleUnsave = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
     if (!session) {
       router.push("/login");
       return;
@@ -47,18 +74,15 @@ export default function RecipeCard({
     try {
       const { error } = await supabase
         .from("SavedRecipes")
-        .insert({
-          recipe_id: id,
-          user_id: session.user.id,
-        });
+        .delete()
+        .match({ recipe_id: id, user_id: session.user.id });
 
       if (error) {
-        console.error("Error saving recipe:", error);
-        alert("Failed to save recipe.");
+        console.error("Error unsaving recipe:", error);
+        alert("Failed to unsave recipe.");
       } else {
-        alert("Recipe saved!");
-        // Let the parent know so it can refresh
-        if (onRecipeSaveSuccess) onRecipeSaveSuccess();
+        alert("Recipe removed from saved!");
+        if (onRecipeUnsaveSuccess) onRecipeUnsaveSuccess();
       }
     } catch (err) {
       console.error("Unexpected error:", err);
@@ -72,7 +96,7 @@ export default function RecipeCard({
       className="cursor-pointer bg-gray-200 rounded-lg p-2 shadow-lg"
     >
       <Image
-        src={imageUrl}          // Use our fetched image URL
+        src={imageUrl}
         alt={title}
         width={200}
         height={200}
@@ -80,13 +104,22 @@ export default function RecipeCard({
       />
       <h3 className="text-lg font-semibold mt-2">{title}</h3>
 
-      {/* Save Button */}
-      <button
-        onClick={handleSave}
-        className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
-      >
-        Save Recipe
-      </button>
+      {/* Conditionally render Save or Unsave */}
+      {isSaved ? (
+        <button
+          onClick={handleUnsave}
+          className="mt-2 rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700"
+        >
+          Unsave
+        </button>
+      ) : (
+        <button
+          onClick={handleSave}
+          className="mt-2 rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+        >
+          Save Recipe
+        </button>
+      )}
     </div>
   );
 }
